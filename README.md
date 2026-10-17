@@ -26,6 +26,10 @@ npm run dev:desktop
 
 The desktop dev command expects the Vite server at `127.0.0.1:5173`. Production builds use relative asset paths for Electron's local `file://` page.
 
+## Windows installer
+
+Run `npm run dist:win` to build the x64 NSIS installer at `release/OpenAI-Usage-Dashboard-${version}-Setup.exe`. The installer bundles the pinned Windows x64 Codex CLI, so the target PC does not need a separate Node.js/npm installation. Internet access is still needed for OpenAI's official device-code sign-in and account usage. The installer is unsigned unless a Windows code-signing certificate is configured.
+
 ## Test
 
 ```bash

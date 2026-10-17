@@ -2,6 +2,7 @@
 node_modules/
 dist/
 coverage/
+release/
 *.tsbuildinfo
 
 # Local settings, credentials, and profile data

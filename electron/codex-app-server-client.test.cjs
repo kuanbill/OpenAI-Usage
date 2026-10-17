@@ -30,7 +30,7 @@ function fakeSpawn(responder = (request) => ({ result: request.method === 'initi
 }
 
 test('provides the notification subscription contract required by UsageAdapter', () => {
-  const client = new CodexAppServerClient({ codexHome: 'C:/isolated/unused-profile' });
+  const client = new CodexAppServerClient({ codexHome: 'C:/isolated/unused-profile', codexExecutable: 'C:/codex.exe' });
   const events = [];
   const unsubscribe = client.onNotification((method, params) => events.push({ method, params }));
   client.emit('notification', 'account/login/completed', { success: true });
@@ -39,14 +39,29 @@ test('provides the notification subscription contract required by UsageAdapter',
   assert.deepEqual(events, [{ method: 'account/login/completed', params: { success: true } }]);
 });
 
-test('initializes a pinned App Server with an isolated CODEX_HOME and sends requests', async () => {
+test('launches the bundled Codex executable without npm and sends App Server requests', async () => {
   const fake = fakeSpawn();
-  const client = new CodexAppServerClient({ codexHome: 'C:/isolated/profile-a', spawnImpl: fake.spawn, platform: 'win32' });
+  const executablePath = 'C:/Program Files/OpenAI Usage Dashboard/resources/codex/bin/codex.exe';
+  const client = new CodexAppServerClient({
+    codexHome: 'C:/isolated/profile-a',
+    codexExecutable: executablePath,
+    environment: {
+      Path: 'C:/Windows/System32',
+      SystemRoot: 'C:/Windows',
+      OPENAI_API_KEY: 'test-only-no-forward'
+    },
+    spawnImpl: fake.spawn,
+    platform: 'win32'
+  });
   await client.start();
   const result = await client.request('account/rateLimits/read', { excludeResetCreditDetails: true });
-  assert.equal(fake.spawned[0].command, 'cmd.exe');
-  assert.ok(fake.spawned[0].args.join(' ').includes('@openai/codex@0.163.0'));
-  assert.equal(fake.spawned[0].options.env.CODEX_HOME, 'C:/isolated/profile-a');
+  assert.equal(fake.spawned[0].command, executablePath);
+  assert.deepEqual(fake.spawned[0].args, ['app-server', '--stdio']);
+  assert.deepEqual(fake.spawned[0].options.env, {
+    PATH: 'C:/Windows/System32',
+    SYSTEMROOT: 'C:/Windows',
+    CODEX_HOME: 'C:/isolated/profile-a'
+  });
   assert.deepEqual(result, { ok: true });
   assert.deepEqual(fake.spawned[0].messages.map((item) => item.method), ['initialize', 'initialized', 'account/rateLimits/read']);
 });
@@ -55,7 +70,7 @@ test('does not expose raw RPC error text in rejected requests', async () => {
   const fake = fakeSpawn((request) => request.method === 'initialize'
     ? { result: { serverInfo: { name: 'fixture' } } }
     : { error: { code: -1, message: 'refresh_token=secret-value' } });
-  const client = new CodexAppServerClient({ codexHome: 'C:/isolated/profile-b', spawnImpl: fake.spawn, platform: 'win32' });
+  const client = new CodexAppServerClient({ codexHome: 'C:/isolated/profile-b', codexExecutable: 'C:/codex.exe', spawnImpl: fake.spawn, platform: 'win32' });
   await client.start();
   await assert.rejects(client.request('account/rateLimits/read'), (error) => {
     assert.equal(error.message.includes('secret-value'), false);

@@ -1,4 +1,4 @@
-const { mapUsageResponse } = require('../spikes/004-dashboard-fixture/usage-model.js');
+const { mapUsageResponse } = require('./usage-model.cjs');
 const { randomUUID } = require('node:crypto');
 
 function isOfficialVerificationUrl(value) {

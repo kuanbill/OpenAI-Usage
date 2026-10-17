@@ -1,6 +1,6 @@
 {
   "name": "openai-usage-dashboard",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -12,17 +12,64 @@
     "dev:desktop": "electron . --dev-url=http://127.0.0.1:5173",
     "build": "tsc -b && vite build",
     "start": "electron .",
+    "dist:win": "npm run build && set \"PATH=%PATH%;%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\" && electron-builder --win nsis --x64",
     "test": "node --test"
+  },
+  "build": {
+    "appId": "com.kuanbill.openai-usage-dashboard",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**/*.cjs",
+      "!electron/**/*.test.cjs"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc",
+        "to": "codex",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "third_party_licenses/OPENAI-CODEX-CLI-0.163.0-LICENSE.txt",
+        "to": "codex/LICENSE-APACHE-2.0.txt"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "OpenAI-Usage-Dashboard-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
   },
   "dependencies": {
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
   "devDependencies": {
+    "@openai/codex-win32-x64": "npm:@openai/codex@0.163.0-win32-x64",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
     "electron": "44.8.0",
+    "electron-builder": "26.15.3",
     "typescript": "7.0.2",
     "vite": "8.3.4"
   }

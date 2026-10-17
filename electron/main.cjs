@@ -3,6 +3,7 @@ const path = require('path');
 const { DEV_ORIGIN, isAllowedDevNavigation, isAllowedExternalUrl, isTrustedIpcSender } = require('./security.cjs');
 const { ProfileStore } = require('./profile-store.cjs');
 const { CodexAppServerClient } = require('./codex-app-server-client.cjs');
+const { resolveCodexExecutable } = require('./codex-runtime.cjs');
 const { AccountService } = require('./account-service.cjs');
 
 const devUrlArg = process.argv.find((arg) => arg.startsWith('--dev-url='));
@@ -75,7 +76,14 @@ app.whenReady().then(() => {
   const store = new ProfileStore(profilesRoot);
   accountService = new AccountService({
     store,
-    createClient: (codexHome) => new CodexAppServerClient({ codexHome })
+    createClient: (codexHome) => new CodexAppServerClient({
+      codexHome,
+      codexExecutable: resolveCodexExecutable({
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        appPath: app.getAppPath()
+      })
+    })
   });
   accountService.on('change', (accounts) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('dashboard:accounts:changed', accounts);

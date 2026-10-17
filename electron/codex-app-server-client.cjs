@@ -2,14 +2,18 @@ const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const readline = require('node:readline');
 const { spawn, spawnSync } = require('node:child_process');
+const { buildCodexEnvironment } = require('./codex-runtime.cjs');
 
 const CLI_VERSION = '0.163.0';
 
 class CodexAppServerClient extends EventEmitter {
-  constructor({ codexHome, spawnImpl = spawn, spawnSyncImpl = spawnSync, platform = process.platform }) {
+  constructor({ codexHome, codexExecutable, spawnImpl = spawn, spawnSyncImpl = spawnSync, environment = process.env, platform = process.platform }) {
     super();
     if (typeof codexHome !== 'string' || !codexHome.trim()) throw new TypeError('CODEX_HOME is required');
+    if (typeof codexExecutable !== 'string' || !codexExecutable.trim()) throw new TypeError('Bundled Codex executable is required');
     this.codexHome = codexHome;
+    this.codexExecutable = codexExecutable;
+    this.environment = environment;
     this.spawnImpl = spawnImpl;
     this.spawnSyncImpl = spawnSyncImpl;
     this.platform = platform;
@@ -37,10 +41,9 @@ class CodexAppServerClient extends EventEmitter {
   async #startProcess() {
     if (this.platform !== 'win32') throw new Error('This app-server adapter currently supports Windows only');
     fs.mkdirSync(this.codexHome, { recursive: true });
-    const command = `npm exec --yes --package=@openai/codex@${CLI_VERSION} -- codex app-server --stdio`;
-    const child = this.spawnImpl('cmd.exe', ['/d', '/s', '/c', command], {
+    const child = this.spawnImpl(this.codexExecutable, ['app-server', '--stdio'], {
       stdio: ['pipe', 'pipe', 'ignore'],
-      env: { ...process.env, CODEX_HOME: this.codexHome },
+      env: buildCodexEnvironment(this.environment, this.codexHome),
       windowsHide: true
     });
     this.process = child;
