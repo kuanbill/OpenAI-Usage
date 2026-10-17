@@ -1,0 +1,27 @@
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local settings, credentials, and profile data
+.env*
+!.env.example
+auth-profiles/
+profiles/
+accounts.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Logs and generated archives
+*.log
+npm-debug.log*
+*.zip
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

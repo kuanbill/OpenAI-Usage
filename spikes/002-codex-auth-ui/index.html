@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Codex 裝置代碼認證 UI 測試</title>
+<style>
+:root{color-scheme:dark;--bg:#10131a;--panel:#1a202b;--line:#303a4b;--text:#edf2fb;--muted:#a7b1c2;--accent:#8bb7ff;--good:#75d6a1;--warn:#ffc96b;--bad:#ff8c8c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,"Segoe UI",sans-serif;padding:28px}
+main{max-width:720px;margin:0 auto}.eyebrow{color:var(--accent);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+h1{font-size:28px;line-height:1.2;margin:.5em 0}.lead{color:var(--muted);max-width:62ch}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;margin-top:18px}
+.status{display:flex;gap:10px;align-items:center;font-weight:700}.dot{width:10px;height:10px;border-radius:50%;background:var(--warn)}.dot.good{background:var(--good)}.dot.bad{background:var(--bad)}
+button{font:inherit;border:0;border-radius:10px;padding:11px 15px;font-weight:700;cursor:pointer;background:var(--accent);color:#0b1220}button.secondary{background:#293447;color:var(--text);border:1px solid var(--line)}button:disabled{opacity:.45;cursor:not-allowed}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}.code-wrap{display:none;margin:18px 0 10px;padding:14px;border:1px dashed #617493;border-radius:12px;background:#121925}.code-label{font-size:12px;color:var(--muted)}.code{font:700 30px/1.2 ui-monospace,Consolas,monospace;letter-spacing:.14em;margin-top:6px;user-select:all;overflow-wrap:anywhere}
+a{color:var(--accent);font-weight:700}.notice{border-left:3px solid var(--warn);padding:10px 12px;background:#282319;border-radius:4px;color:#f7e4bd;margin-top:14px}.small{font-size:13px;color:var(--muted)}.result{margin-top:12px;color:var(--good);font-weight:600}.hidden{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">LOCAL-ONLY AUTH PROBE</div>
+  <h1>Codex 裝置代碼認證測試</h1>
+  <p class="lead">本測試只驗證官方裝置代碼登入能否完成，並確認登入後 Codex App Server 可讀取用量資料。使用隔離的暫存 Codex profile；不變更方案、不付款、不使用 API key，也不執行重置。</p>
+
+  <section class="card">
+    <div class="status"><span id="dot" class="dot"></span><span id="state">尚未開始</span></div>
+    <div id="message" class="small" style="margin-top:6px">按下開始後才會向 Codex App Server 要求一次性裝置代碼。</div>
+    <div id="codeWrap" class="code-wrap">
+      <div class="code-label">一次性裝置代碼（只在本頁記憶體中顯示）</div>
+      <div id="code" class="code" aria-live="polite"></div>
+      <p class="small">請只在下方 OpenAI 官方驗證頁輸入。不要把代碼貼到聊天、郵件或其他網站。</p>
+      <a id="verify" href="#" target="_blank" rel="noopener noreferrer">開啟 OpenAI 官方驗證頁</a>
+    </div>
+    <div class="notice">裝置代碼等同短期登入憑證。Hermes 不會索取、記錄或查看你在此頁產生的代碼；請勿將代碼傳給任何人。</div>
+    <div id="result" class="result hidden"></div>
+    <div class="actions">
+      <button id="start">開始裝置代碼測試</button>
+      <button id="cancel" class="secondary" disabled>取消登入</button>
+      <button id="cleanup" class="secondary" disabled>登出並清除暫存認證</button>
+    </div>
+  </section>
+
+  <p class="small" style="margin-top:16px">完成後按「登出並清除暫存認證」。本測試不顯示或保存用量數值，只回報認證與讀取是否成功。</p>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let started = false;
+let poller = null;
+function paint(state, message, good=false, bad=false){
+  $('state').textContent = state;
+  $('message').textContent = message;
+  $('dot').className = 'dot' + (good ? ' good' : bad ? ' bad' : '');
+}
+async function api(path){
+  const r = await fetch(path, {method:'POST',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store'});
+  const j = await r.json();
+  if(!r.ok) throw new Error(j.error || '本機測試服務失敗');
+  return j;
+}
+async function poll(){
+  try{
+    const r=await fetch('/api/status',{cache:'no-store'}); const s=await r.json();
+    if(s.state==='pending') paint('等待瀏覽器認證','請在 OpenAI 官方頁輸入本頁的一次性代碼。',false,false);
+    else if(s.state==='checking') paint('認證完成，讀取用量能力中','正在執行唯讀檢查；不顯示用量數值。');
+    else if(s.state==='authenticated'){
+      paint('測試通過','裝置代碼認證成功，且官方 App Server 的用量讀取成功。',true,false);
+      $('result').textContent='通過：account/rateLimits/read 已回應。未執行任何重置。';$('result').classList.remove('hidden');
+      $('codeWrap').classList.add('hidden');$('code').textContent='';clearInterval(poller);$('cancel').disabled=true;$('cleanup').disabled=false;
+    }else if(s.state==='failed'){
+      paint('測試未完成',s.error||'認證或唯讀檢查失敗。',false,true);clearInterval(poller);$('codeWrap').classList.add('hidden');$('code').textContent='';$('cancel').disabled=true;$('cleanup').disabled=false;
+    }else if(s.state==='cancelled'){
+      paint('已取消','本次裝置代碼登入已取消。',false,false);clearInterval(poller);$('codeWrap').classList.add('hidden');$('code').textContent='';$('start').disabled=true;$('cleanup').disabled=false;
+    }else if(s.state==='cleaned'){
+      paint('暫存認證已清除','Codex 測試 profile 已登出並清除。',true,false);clearInterval(poller);$('codeWrap').classList.add('hidden');$('code').textContent='';$('start').disabled=true;$('cleanup').disabled=true;
+    }
+  }catch{paint('連線中','等待本機測試服務回應。');}
+}
+$('start').addEventListener('click',async()=>{
+  if(started)return; started=true; $('start').disabled=true;paint('正在啟動官方認證','不會顯示或記錄任何 API key。');
+  try{
+    const r=await api('/api/login/start');
+    const u=new URL(r.verificationUrl);
+    if(u.protocol!=='https:'||!(u.hostname==='auth.openai.com'||u.hostname.endsWith('.openai.com')||u.hostname==='chatgpt.com'||u.hostname.endsWith('.chatgpt.com')))throw new Error('驗證網址不是 OpenAI 官方 HTTPS 網域，已停止。');
+    $('code').textContent=r.userCode;
+    $('verify').href=u.href;
+    $('codeWrap').style.display='block';
+    $('cancel').disabled=false;$('cleanup').disabled=false;
+    paint('裝置代碼已建立','請在 OpenAI 官方頁自行完成認證；不要分享代碼。');
+    poller=setInterval(poll,2000);
+  }catch(e){paint('無法啟動認證',e.message,false,true);$('start').disabled=false;started=false;}
+});
+$('cancel').addEventListener('click',async()=>{try{await api('/api/login/cancel');}catch{};poll();});
+$('cleanup').addEventListener('click',async()=>{if(!confirm('確定登出本次測試帳號並清除隔離的暫存認證資料？'))return;try{await api('/api/cleanup');}catch(e){paint('清理失敗',e.message,false,true);}poll();});
+</script>
+</body>
+</html>

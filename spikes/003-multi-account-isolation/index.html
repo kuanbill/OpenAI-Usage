@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Codex 雙帳號隔離測試</title>
+<style>
+:root{color-scheme:dark;--bg:#10131a;--panel:#1a202b;--line:#303a4b;--text:#edf2fb;--muted:#a7b1c2;--accent:#8bb7ff;--good:#75d6a1;--warn:#ffc96b;--bad:#ff8c8c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,"Segoe UI",sans-serif;padding:26px}
+main{max-width:900px;margin:0 auto}.eyebrow{color:var(--accent);font-size:12px;font-weight:700;letter-spacing:.14em}h1{font-size:27px;line-height:1.2;margin:.5em 0}.lead{color:var(--muted);max-width:75ch}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:18px}.card{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:19px}.title{font-size:18px;font-weight:750}.status{display:flex;gap:9px;align-items:center;margin-top:10px;font-weight:650}.dot{width:9px;height:9px;border-radius:50%;background:var(--warn)}.dot.good{background:var(--good)}.dot.bad{background:var(--bad)}.small{font-size:13px;color:var(--muted)}button{font:inherit;border:0;border-radius:9px;padding:10px 13px;font-weight:700;cursor:pointer;background:var(--accent);color:#0b1220}button.secondary{background:#293447;color:var(--text);border:1px solid var(--line)}button:disabled{opacity:.45;cursor:not-allowed}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:15px}.codebox{display:none;margin-top:14px;border:1px dashed #617493;border-radius:11px;padding:13px;background:#121925}.code{font:700 27px ui-monospace,Consolas,monospace;letter-spacing:.13em;overflow-wrap:anywhere;user-select:all;margin:5px 0 8px}a{color:var(--accent);font-weight:700}.banner{margin-top:15px;padding:11px 13px;border-left:3px solid var(--warn);background:#282319;color:#f7e4bd}.comparison{margin-top:15px;padding:15px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-weight:700}.good{color:var(--good)}.bad{color:var(--bad)}.hidden{display:none!important}#cleanup{margin-top:15px}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">LOCAL-ONLY • TWO ISOLATED CODEX PROFILES</div>
+<h1>Codex 雙帳號隔離驗證</h1>
+<p class="lead">此測試為兩個帳號分別啟動 Codex App Server，並使用不同的暫存 <code>CODEX_HOME</code>。請只在各自的 OpenAI 官方頁輸入代碼。測試只確認兩個登入身分是否不同，以及兩邊是否都能唯讀取得用量；不顯示帳號信箱或用量數字。</p>
+<div class="grid">
+<section class="card" id="cardA"><div class="title">測試帳號 A</div><div class="small">獨立 profile：account-a</div><div class="status"><span id="dotA" class="dot"></span><span id="stateA">尚未開始</span></div><div id="messageA" class="small">按開始後才會產生一次性代碼。</div><div id="codeBoxA" class="codebox"><div class="small">一次性代碼（僅在此頁記憶體中）</div><div id="codeA" class="code" aria-live="polite"></div><a id="linkA" target="_blank" rel="noopener noreferrer">開啟 OpenAI 官方驗證頁</a></div><div class="actions"><button id="startA">登入帳號 A</button><button id="cancelA" class="secondary" disabled>取消 A</button></div></section>
+<section class="card" id="cardB"><div class="title">測試帳號 B</div><div class="small">獨立 profile：account-b</div><div class="status"><span id="dotB" class="dot"></span><span id="stateB">尚未開始</span></div><div id="messageB" class="small">請使用不同的 OpenAI 帳號，確認 profile 不會串用。</div><div id="codeBoxB" class="codebox"><div class="small">一次性代碼（僅在此頁記憶體中）</div><div id="codeB" class="code" aria-live="polite"></div><a id="linkB" target="_blank" rel="noopener noreferrer">開啟 OpenAI 官方驗證頁</a></div><div class="actions"><button id="startB">登入帳號 B</button><button id="cancelB" class="secondary" disabled>取消 B</button></div></section>
+</div>
+<div id="comparison" class="comparison">身分隔離比對：尚未完成兩個帳號的認證與用量讀取。</div>
+<div class="banner">裝置代碼是短期登入憑證。不要把代碼傳給任何人，也不要貼到聊天；只在本頁提供的 OpenAI 官方 HTTPS 驗證頁輸入。若登入頁出現 API key、付費、付款或方案變更要求，請取消並停止測試。</div>
+<div class="actions"><button id="cleanup" class="secondary">登出並清除兩份暫存 profile</button></div>
+<p class="small">服務綁定本機 127.0.0.1。認證完成後只回報用量讀取布林結果及「同一／不同／無法比對」狀態；不保存信箱、帳號 ID、代碼或用量數值。測試結束會登出並刪除兩份 profile。</p>
+</main>
+<script>
+const $=id=>document.getElementById(id);let poller=null;const started={A:false,B:false};
+const labels={idle:'尚未開始',starting:'正在啟動官方登入',pending:'等待瀏覽器認證',checking:'認證完成，檢查唯讀用量',authenticated:'認證與用量讀取成功',failed:'測試未完成',cancelled:'已取消',cleaned:'暫存認證已清除'};
+function paint(which,state,message='',tone=''){const s=which.toUpperCase();$('state'+s).textContent=labels[state]||state;$('message'+s).textContent=message;$('dot'+s).className='dot'+(tone?' '+tone:'');}
+async function post(path){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store'});const j=await r.json();if(!r.ok)throw new Error(j.error||'本機測試服務失敗');return j;}
+async function refresh(){try{const r=await fetch('/api/status',{cache:'no-store'});const s=await r.json();for(const key of ['accountA','accountB']){const letter=key==='accountA'?'A':'B',x=s.accounts[key];paint(letter,x.state,x.error||'',x.state==='authenticated'?'good':x.state==='failed'?'bad':'');if(x.state==='pending')$('message'+letter).textContent='請只在 OpenAI 官方頁輸入此頁代碼。';if(['authenticated','failed','cancelled','cleaned'].includes(x.state)){$('codeBox'+letter).classList.add('hidden');$('code'+letter).textContent='';$('cancel'+letter).disabled=true;if(x.state!=='idle')$('start'+letter).disabled=true;}}
+const c=s.identityComparison,box=$('comparison');if(c==='different'){box.innerHTML='身分隔離比對：<span class="good">兩個 profile 對應不同 ChatGPT 帳號。</span> 兩邊的唯讀用量讀取均成功。'}else if(c==='same'){box.innerHTML='身分隔離比對：<span class="bad">兩個 profile 登入了同一個 ChatGPT 帳號。</span> 請確認 B 使用另一帳號後重新執行。'}else if(c==='unavailable'){box.textContent='身分隔離比對：官方回應未提供可安全比對的帳號信箱；不宣稱帳號已區隔。'}else if(c==='pending'&&s.accounts.accountA.state==='cleaned'&&s.accounts.accountB.state==='cleaned'){box.textContent='測試資料已清除。';}
+}catch{for(const letter of ['A','B'])paint(letter,'連線中','等待本機服務回應。');}}
+for(const letter of ['A','B']){$('start'+letter).addEventListener('click',async()=>{if(started[letter])return;started[letter]=true;$('start'+letter).disabled=true;paint(letter,'starting','請勿分享稍後出現的代碼。');try{const slot=letter==='A'?'accountA':'accountB',d=await post(`/api/${slot}/login/start`),u=new URL(d.verificationUrl);if(u.protocol!=='https:'||!(u.hostname==='auth.openai.com'||u.hostname.endsWith('.openai.com')||u.hostname==='chatgpt.com'||u.hostname.endsWith('.chatgpt.com')))throw new Error('驗證頁不是 OpenAI 官方 HTTPS 網域。');$('code'+letter).textContent=d.userCode;$('link'+letter).href=u.href;$('codeBox'+letter).style.display='block';$('cancel'+letter).disabled=false;paint(letter,'pending','請在 OpenAI 官方驗證頁自行輸入代碼。');if(!poller)poller=setInterval(refresh,1500);}catch(e){paint(letter,'failed',e.message,'bad');$('start'+letter).disabled=false;started[letter]=false;}});$('cancel'+letter).addEventListener('click',async()=>{const slot=letter==='A'?'accountA':'accountB';try{await post(`/api/${slot}/login/cancel`);}catch{}refresh();});}
+$('cleanup').addEventListener('click',async()=>{if(!confirm('確定登出並刪除本次測試建立的兩份隔離 profile？'))return;try{await post('/api/cleanup');await refresh();$('cleanup').disabled=true;}catch(e){alert(e.message);}});
+refresh();
+</script></body></html>
